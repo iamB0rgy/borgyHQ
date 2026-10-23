@@ -1,0 +1,23 @@
+#!/bin/bash
+HQ="$(cd "$(dirname "$0")/.." && pwd)"
+id="$1"; mins="$2"
+label="com.aihq.$id"
+plist="$HOME/Library/LaunchAgents/$label.plist"
+[ -n "$id" ] && [ -n "$mins" ] || { echo "usage: schedule <agent> <minutes|off>"; exit 1; }
+launchctl unload "$plist" 2>/dev/null
+if [ "$mins" = "off" ]; then rm -f "$plist"; echo "$id unscheduled"; exit 0; fi
+CLAUDE_BIN="$(command -v claude)" || { echo "claude not found on PATH"; exit 1; }
+mkdir -p "$HOME/Library/LaunchAgents"
+cat > "$plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>$label</string>
+  <key>ProgramArguments</key><array><string>$HQ/bin/run-agent</string><string>$id</string></array>
+  <key>StartInterval</key><integer>$((mins*60))</integer>
+  <key>EnvironmentVariables</key><dict>
+    <key>PATH</key><string>$(dirname "$CLAUDE_BIN"):$HOME/.local/bin:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+  </dict>
+</dict></plist>
+PLIST
+launchctl load "$plist" && echo "$id runs every $mins min (log: $HQ/state/logs/$id.log)"

@@ -1,0 +1,5 @@
+state/
+agents/*/work/
+agents/*/.claude/
+__pycache__/
+.DS_Store

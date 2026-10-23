@@ -1,0 +1,14 @@
+{
+  "ceo": { "name": "You", "title": "Founder / CEO" },
+  "company": "AI HQ",
+  "vault": "~/vault",
+  "ollama_model": "qwen3.5:9b",
+  "aliases": {},
+  "agents": [
+    { "id": "pulse", "name": "Pulse", "role": "Project manager", "projects": ["all"] },
+    { "id": "forge", "name": "Forge", "role": "Engineering", "projects": [] },
+    { "id": "radar", "name": "Radar", "role": "Ops and support", "projects": [] },
+    { "id": "shelf", "name": "Shelf", "role": "Marketing", "projects": [] },
+    { "id": "pitch", "name": "Pitch", "role": "Sales", "projects": [] }
+  ]
+}

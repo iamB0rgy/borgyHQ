@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+"""hq - the shared status board for your AI team.
+
+Agents call this from Claude Code; hooks call it automatically.
+
+  hq task "what I'm doing now"        set my current task (status -> working)
+  hq card "title" ["detail"]          ask the CEO for a decision (creates a pending card)
+  hq inbox                            my cards that the CEO has decided on
+  hq ack <card_id>                    mark a decided card as handled
+  hq assign <agent> "task"            put a task in another agent's queue (Pulse uses this)
+  hq queue                            my open queue items
+  hq finish <queue_id>                close a queue item
+  hq status                           whole team at a glance
+  hq hook <start|notify|stop>         used by Claude Code hooks (reads hook JSON on stdin)
+"""
+import sys, os, json, uuid, glob
+from datetime import datetime
+
+HQ = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+STATE = os.path.join(HQ, "state")
+AGENTS_DIR = os.path.join(STATE, "agents")
+CARDS_DIR = os.path.join(STATE, "cards")
+QUEUE_DIR = os.path.join(STATE, "queue")
+for d in (AGENTS_DIR, CARDS_DIR, QUEUE_DIR):
+    os.makedirs(d, exist_ok=True)
+
+
+def now():
+    return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def read(path, default=None):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+
+def write(path, data):
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f, indent=2)
+    os.replace(tmp, path)
+
+
+def agent_from(path):
+    base = os.path.join(HQ, "agents")
+    rel = os.path.relpath(os.path.realpath(path), base)
+    if rel.startswith("..") or rel == ".":
+        return None
+    return rel.split(os.sep)[0]
+
+
+def me():
+    a = os.environ.get("HQ_AGENT") or agent_from(os.getcwd())
+    if not a:
+        sys.exit("hq: run this from inside an agent folder (or set HQ_AGENT)")
+    return a
+
+
+def set_status(agent, status, task=None):
+    p = os.path.join(AGENTS_DIR, f"{agent}.json")
+    s = read(p, {}) or {}
+    s.update({"agent": agent, "status": status, "updated": now()})
+    if task is not None:
+        s["task"] = task
+    write(p, s)
+
+
+def cards(agent=None, status=None):
+    out = []
+    for p in glob.glob(os.path.join(CARDS_DIR, "*.json")):
+        c = read(p)
+        if not c:
+            continue
+        if agent and c.get("agent") != agent:
+            continue
+        if status and c.get("status") not in status:
+            continue
+        out.append(c)
+    return sorted(out, key=lambda c: c.get("created", ""))
+
+
+def queue(agent=None, open_only=True):
+    out = []
+    for p in glob.glob(os.path.join(QUEUE_DIR, "*.json")):
+        q = read(p)
+        if not q:
+            continue
+        if agent and q.get("to") != agent:
+            continue
+        if open_only and q.get("status") != "open":
+            continue
+        out.append(q)
+    return sorted(out, key=lambda q: q.get("created", ""))
+
+
+def cmd_hook(event):
+    data = {}
+    if not sys.stdin.isatty():
+        try:
+            data = json.load(sys.stdin)
+        except Exception:
+            data = {}
+    agent = agent_from(data.get("cwd") or os.getcwd())
+    if not agent:
+        return
+    if event == "start":
+        set_status(agent, "working")
+    elif event == "notify":
+        set_status(agent, "waiting")
+    elif event == "stop":
+        pending = cards(agent, {"pending"})
+        set_status(agent, "waiting" if pending else "done")
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help", "help"):
+        print(__doc__)
+        return
+    cmd, rest = args[0], args[1:]
+
+    if cmd == "hook":
+        try:
+            cmd_hook(rest[0] if rest else "")
+        except Exception:
+            pass
+        return
+
+    if cmd == "task":
+        set_status(me(), "working", " ".join(rest))
+        print("ok")
+
+    elif cmd == "card":
+        if not rest:
+            sys.exit('usage: hq card "title" ["detail"]')
+        c = {
+            "id": uuid.uuid4().hex[:8], "agent": me(), "title": rest[0],
+            "detail": rest[1] if len(rest) > 1 else "", "status": "pending",
+            "note": "", "created": now(), "decided": None, "acked": False,
+        }
+        write(os.path.join(CARDS_DIR, f"{c['id']}.json"), c)
+        print(f"card {c['id']} created - waiting on the CEO")
+
+    elif cmd == "inbox":
+        items = [c for c in cards(me(), {"approved", "rejected", "hold"}) if not c.get("acked")]
+        pend = cards(me(), {"pending"})
+        if not items:
+            print("No decisions waiting for you.")
+        for c in items:
+            print(f"[{c['id']}] {c['status'].upper()}: {c['title']}")
+            if c.get("note"):
+                print(f"    CEO note: {c['note']}")
+        if pend:
+            print(f"({len(pend)} card(s) still pending with the CEO - don't act on those yet)")
+
+    elif cmd == "ack":
+        p = os.path.join(CARDS_DIR, f"{rest[0]}.json") if rest else ""
+        c = read(p)
+        if not c or c.get("agent") != me():
+            sys.exit("hq: no such card for you")
+        if c.get("status") == "hold":
+            sys.exit("hq: card is on hold - leave it until the CEO decides")
+        c["acked"] = True
+        write(p, c)
+        print("ok")
+
+    elif cmd == "assign":
+        if len(rest) < 2:
+            sys.exit('usage: hq assign <agent> "task"')
+        if not os.path.isdir(os.path.join(HQ, "agents", rest[0])):
+            sys.exit(f"hq: no agent called {rest[0]}")
+        q = {"id": uuid.uuid4().hex[:8], "to": rest[0], "from": me(), "text": rest[1],
+             "status": "open", "created": now()}
+        write(os.path.join(QUEUE_DIR, f"{q['id']}.json"), q)
+        print(f"queued {q['id']} for {rest[0]}")
+
+    elif cmd == "queue":
+        items = queue(me())
+        if not items:
+            print("Queue is empty.")
+        for q in items:
+            print(f"[{q['id']}] from {q['from']}: {q['text']}")
+
+    elif cmd == "finish":
+        p = os.path.join(QUEUE_DIR, f"{rest[0]}.json") if rest else ""
+        q = read(p)
+        if not q or q.get("to") != me():
+            sys.exit("hq: no such queue item for you")
+        q["status"] = "finished"
+        q["finished"] = now()
+        write(p, q)
+        print("ok")
+
+    elif cmd == "status":
+        team = read(os.path.join(HQ, "team.json"), {"agents": []})
+        for a in team["agents"]:
+            s = read(os.path.join(AGENTS_DIR, f"{a['id']}.json"), {}) or {}
+            pend = len(cards(a["id"], {"pending"}))
+            q = len(queue(a["id"]))
+            print(f"{a['name']:<8} {s.get('status', 'idle'):<8} cards:{pend} queue:{q}  {s.get('task', '')}")
+    else:
+        sys.exit(f"hq: unknown command '{cmd}'. Try: hq help")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,11 @@
+{
+  "id": "c48b1e77",
+  "agent": "forge",
+  "title": "Run the Ledgerly invoice migration on production",
+  "detail": "Migration adds the usage_lines table and backfills 30 days. Tested on a copy; takes about 4 minutes. Recommend running tonight after 22:00.",
+  "status": "pending",
+  "note": "",
+  "created": "2026-10-23T10:48:00+00:00",
+  "decided": null,
+  "acked": false
+}

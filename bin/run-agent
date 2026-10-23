@@ -1,0 +1,9 @@
+#!/bin/bash
+HQ="$(cd "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")/.." && pwd)"
+id="$1"; shift
+[ -d "$HQ/agents/$id" ] || { echo "No agent folder: $HQ/agents/$id"; exit 1; }
+cd "$HQ/agents/$id"
+PROMPT="Start your shift: follow the shift routine in CLAUDE.md. $*"
+mkdir -p "$HQ/state/logs"
+claude -p "$PROMPT" >> "$HQ/state/logs/$id.log" 2>&1
+echo "--- $(date) shift finished" >> "$HQ/state/logs/$id.log"

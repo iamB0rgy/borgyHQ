@@ -1,0 +1,69 @@
+{
+  "ceo": {
+    "name": "Alex Mercer",
+    "title": "Founder / CEO"
+  },
+  "company": "LOUWARD LABS",
+  "vault": "samples/vault",
+  "ollama_model": "qwen3.5:9b",
+  "aliases": {
+    "nw-dash": "Northwind Analytics",
+    "shop": "Cobblestone Market"
+  },
+  "agents": [
+    {
+      "id": "pulse",
+      "name": "Pulse",
+      "role": "Project manager",
+      "projects": [
+        "all"
+      ]
+    },
+    {
+      "id": "forge",
+      "name": "Forge",
+      "role": "Engineering",
+      "projects": [
+        "Ledgerly",
+        "Sparrow Pay",
+        "Orbit Desk",
+        "Rook Security"
+      ]
+    },
+    {
+      "id": "radar",
+      "name": "Radar",
+      "role": "Ops and support",
+      "projects": [
+        "Northwind Analytics",
+        "Tidewater Logistics",
+        "Juniper Home"
+      ]
+    },
+    {
+      "id": "shelf",
+      "name": "Shelf",
+      "role": "Marketing",
+      "projects": [
+        "Cobblestone Market",
+        "Static Air",
+        "Quill and Ink",
+        "Glasshouse Studio"
+      ]
+    },
+    {
+      "id": "pitch",
+      "name": "Pitch",
+      "role": "Sales",
+      "projects": [
+        "Harbor Hotel",
+        "Birchwood Clinic",
+        "Ember Kitchen"
+      ]
+    }
+  ],
+  "credit": {
+    "text": "made by LouWard Labs",
+    "url": "https://louward.com"
+  }
+}
